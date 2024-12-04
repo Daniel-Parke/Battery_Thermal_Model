@@ -22,7 +22,10 @@ The model retrieves TMY weather data for a specific location based on Latitude a
 
 The Model is designed to be flexible and allow for different Battery & Box options to be modelled. By using arrays the model can simulate both conductive and convective heat flows, with the net energy flows and temperatures for each model parameter being recorded. 
 
-![Example of Model simulating Heater kicking on when Box temperature reaches trigger threshold](TMY_Data/Data/example_model_plot.png)
+<div style="text-align: center;">
+  <img src="TMY_Data/Data/example_model_plot.png" alt="Example of Model simulating Heater kicking on when Box temperature reaches trigger threshold" />
+  <p>Model simulating heater activation when the box temperature reaches the trigger threshold</p>
+</div>
 
 ## Currently in devlopment:
 - Ability to trigger cooling fan upon temperature triggers, similar implementation to heater pad
