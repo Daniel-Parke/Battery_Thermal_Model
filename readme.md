@@ -27,8 +27,6 @@ The Model is designed to be flexible and allow for different Battery & Box optio
   <p>Model simulating heater activation when the box temperature reaches the trigger threshold</p>
 </div>
 
-### **VIEW FULL INTERACTIVE GRAPH** [View the interactive HTML visualization]("TMY_Data/Data/example_model_plot.html")
-
 ## Currently in devlopment:
 - Ability to trigger cooling fan upon temperature triggers, similar implementation to heater pad
 - Radiation losses to be added at all stages of the model. Function is made, just needs implemented
