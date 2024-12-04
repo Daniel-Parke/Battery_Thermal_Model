@@ -10,7 +10,6 @@
   - [3. Clone or Download the Repository](#3-clone-or-download-the-repository)
   - [4. Set Up a Virtual Environment](#4-set-up-a-virtual-environment)
   - [5. Install Required Packages](#5-install-required-packages)
-- [Getting Started with the Tutorials](#getting-started-with-the-tutorials)
 - [Additional Resources](#additional-resources)
 - [Contact](#contact)
 
