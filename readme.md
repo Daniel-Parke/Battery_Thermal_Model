@@ -23,10 +23,10 @@ The model retrieves TMY weather data for a specific location based on Latitude a
 The Model is designed to be flexible and allow for different Battery & Box options to be modelled. By using arrays the model can simulate both conductive and convective heat flows, with the net energy flows and temperatures for each model parameter being recorded. 
 
 ## Currently in devlopment:
--[] Ability to trigger cooling fan upon temperature triggers, similar implementation to heater pad
--[] Radiation losses to be added at all stages of the model. Function is made, just needs implemented
--[] Ability to model customizable time intervals ranging from 1s - 1m over long periods of time. Current model is limited to only 1m intervals
--[] Streamlit app to allow for easier user input to change model parameters, as well as displaying results
+- Ability to trigger cooling fan upon temperature triggers, similar implementation to heater pad
+- Radiation losses to be added at all stages of the model. Function is made, just needs implemented
+- Ability to model customizable time intervals ranging from 1s - 1m over long periods of time. Current model is limited to only 1m intervals
+- Streamlit app to allow for easier user input to change model parameters, as well as displaying results
 
 ## Prerequisites
 
