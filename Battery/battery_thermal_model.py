@@ -86,11 +86,62 @@ def calculate_heat_energy_flow(
     return heat_energy_joules
 
 
-def calculate_radiative_heat_loss(
+def calculate_inner_radiative_heat_flow(
+    surface_area_inner: float,
+    surface_area_outer: float,
+    emissivity_inner: float,
+    emissivity_outer: float,
+    temperature_inner_c: float,
+    temperature_outer_c: float,
+    duration_seconds: float
+) -> float:
+    """
+    Calculate radiative heat transfer between the inner box and the inner container walls.
+
+    Args:
+        surface_area_inner (float): Surface area of the inner box (m²).
+        surface_area_outer (float): Surface area of the inner container walls (m²).
+        emissivity_inner (float): Emissivity of the inner box surface (0 to 1).
+        emissivity_outer (float): Emissivity of the container wall surface (0 to 1).
+        temperature_inner_c (float): Temperature of the inner box (Celsius).
+        temperature_outer_c (float): Temperature of the inner container walls (Celsius).
+        duration_seconds (float): Duration for the energy transfer in seconds.
+
+    Returns:
+        float: Total heat transfer in Joules (J).
+    """
+    # Stefan-Boltzmann constant
+    stefan_boltzmann_constant = 5.67e-8
+
+    # Convert temperatures to Kelvin
+    temperature_inner_k = temperature_inner_c + 273.15
+    temperature_outer_k = temperature_outer_c + 273.15
+
+    # Effective emissivity
+    effective_emissivity = 1 / (
+        (1 / emissivity_inner)
+        + (surface_area_inner / surface_area_outer)
+        * (1 / emissivity_outer - 1)
+    )
+
+    # Radiative power (W)
+    power_watts = (
+        stefan_boltzmann_constant
+        * effective_emissivity
+        * surface_area_inner
+        * (temperature_inner_k**4 - temperature_outer_k**4)
+    )
+
+    # Total heat transfer over the duration (J)
+    heat_energy_joules = power_watts * duration_seconds
+    return heat_energy_joules
+
+
+def calculate_outer_radiative_heat_flow(
     surface_area: float,
     emissivity: float,
-    temperature_inner_k: float,
-    temperature_outer_k: float,
+    temperature_inner_c: float,
+    temperature_outer_c: float,
     duration_seconds: float
 ) -> float:
     """
@@ -99,14 +150,18 @@ def calculate_radiative_heat_loss(
     Args:
         surface_area (float): Surface area in square meters (m²).
         emissivity (float): Emissivity of the surface (0 to 1).
-        temperature_inner_k (float): Temperature of the emitting surface in Kelvin (K).
-        temperature_outer_k (float): Temperature of the receiving surface in Kelvin (K).
+        temperature_inner_c (float): Temperature of the emitting surface in Celcius (C).
+        temperature_outer_c (float): Temperature of the receiving surface in Celcius (C).
         duration_seconds (float): Time duration for the energy transfer in seconds.
 
     Returns:
         float: Radiative heat transfer in Joules (J).
     """
+    # Define constants and convert Celcius to Kelvin
     stefan_boltzmann_constant = 5.67e-8  # W/m²·K⁴
+    temperature_inner_k = temperature_inner_c + 273.15  # Convert to Kelvin
+    temperature_outer_k = temperature_outer_c + 273.15  # Convert to Kelvin
+
     power_watts = (
         stefan_boltzmann_constant
         * emissivity
@@ -261,6 +316,8 @@ def calculate_battery_box_parameters(
         box_transfer_array=box_transfer_array,
     )
     total_box_area = box_conductive_area + box_convective_area
+    total_battery_area = battery_conductive_area + battery_convective_area
+
 
     # Calculate resistances for each surface area required
     # Composite wall material properties, outer material presented first
@@ -318,7 +375,8 @@ def calculate_battery_box_parameters(
 
     return (box_wall_mass_kg, box_heat_capacity, battery_conductive_resistance, 
             battery_convective_resistance, box_inner_convective_resistance, box_composite_conductive_resistance,
-            box_outer_conductive_resistance, box_outer_convective_resistance)
+            box_outer_conductive_resistance, box_outer_convective_resistance,
+            total_box_area, total_battery_area)
 
 
 # -------------------------------------------------------------------------- #
@@ -378,7 +436,8 @@ def calculate_net_energy_flows(
     (
         box_wall_mass_kg, box_heat_capacity, battery_conductive_resistance, 
         battery_convective_resistance, box_inner_convective_resistance, box_composite_conductive_resistance,
-        box_outer_conductive_resistance, box_outer_convective_resistance
+        box_outer_conductive_resistance, box_outer_convective_resistance,
+        total_box_area, total_battery_area
         ) = calculate_battery_box_parameters(
         battery_length = battery_length, 
         battery_width = battery_width, 
@@ -413,18 +472,22 @@ def calculate_net_energy_flows(
         "Battery_Net_Energy_J": load_losses_j,
         "Battery_Cond_to_Box_Inner_Energy_J": 0.0,
         "Battery_Conv_to_Box_Inner_Energy_J": 0.0,
+        "Battery_Radi_to_Box_Inner_Energy_J": 0.0,
         "Heater_to_Battery_Energy_J": 0.0,
         "Heater_to_Box_Inner_Energy_J": 0.0,
         "Box_Inner_Net_Energy_J": 0.0,
         "Box_Inner_Cond_to_Battery_Energy_J": 0.0,
         "Box_Inner_Conv_to_Battery_Energy_J": 0.0,
+        "Box_Inner_Radi_to_Battery_Energy_J": 0.0,
         "Box_Inner_to_Box_Outer_Energy_J": 0.0,
         "Box_Outer_Net_Energy_J": 0.0,
         "Box_Outer_to_Box_Inner_Energy_J": 0.0,
         "Box_Outer_Cond_to_Environment_Energy_J": 0.0,
         "Box_Outer_Conv_to_Environment_Energy_J": 0.0,
+        "Box_Outer_Radi_to_Environment_Energy_J": 0.0,
         "Box_Outer_Cond_from_Environment_Energy_J": 0.0,
         "Box_Outer_Conv_from_Environment_Energy_J": 0.0,
+        "Box_Radi_Conv_from_Environment_Energy_J": 0.0,
     }
 
     # Dynamically add columns to datefreame based on default columns above
@@ -453,6 +516,7 @@ def calculate_net_energy_flows(
     battery_net_energy = arrays["Battery_Net_Energy_J"]
     battery_cond_to_box_inner_energy = arrays["Battery_Cond_to_Box_Inner_Energy_J"]
     battery_conv_to_box_inner_energy = arrays["Battery_Conv_to_Box_Inner_Energy_J"]
+    battery_radi_to_box_inner_energy = arrays["Battery_Radi_to_Box_Inner_Energy_J"]
 
     heater_to_battery_energy = arrays["Heater_to_Battery_Energy_J"]
     heater_to_box_inner_energy = arrays["Heater_to_Box_Inner_Energy_J"]
@@ -460,14 +524,17 @@ def calculate_net_energy_flows(
     box_inner_net_energy = arrays["Box_Inner_Net_Energy_J"]
     box_inner_cond_to_battery_energy = arrays["Box_Inner_Cond_to_Battery_Energy_J"]
     box_inner_conv_to_battery_energy = arrays["Box_Inner_Conv_to_Battery_Energy_J"]
+    box_inner_radi_to_battery_energy = arrays["Box_Inner_Radi_to_Battery_Energy_J"]
     box_inner_to_box_outer_energy = arrays["Box_Inner_to_Box_Outer_Energy_J"]
 
     box_outer_net_energy = arrays["Box_Outer_Net_Energy_J"]
     box_outer_to_box_inner_energy = arrays["Box_Outer_to_Box_Inner_Energy_J"]
     box_outer_cond_to_environment_energy = arrays["Box_Outer_Cond_to_Environment_Energy_J"]
     box_outer_conv_to_environment_energy = arrays["Box_Outer_Conv_to_Environment_Energy_J"]
+    box_outer_radi_to_environment_energy = arrays["Box_Outer_Radi_to_Environment_Energy_J"]
     box_outer_cond_from_environment_energy = arrays["Box_Outer_Cond_from_Environment_Energy_J"]
     box_outer_conv_from_environment_energy = arrays["Box_Outer_Conv_from_Environment_Energy_J"]
+    box_outer_radi_from_environment_energy = arrays["Box_Radi_Conv_from_Environment_Energy_J"]
 
     # MODEL VARIABLES THAT NEED INITIALISED FROM ARRAYS FOR FIRST VALUE
     battery_temp_c = battery_temp[0]
@@ -561,6 +628,26 @@ def calculate_net_energy_flows(
         box_inner_net_energy[i] += battery_conv_energy_flow_to_inner_wall_j
 
 
+        # Calculate Radiative energy exchange between battery and inner walls
+        battery_radiative_energy_flow_to_inner_wall_j = calculate_inner_radiative_heat_flow(
+            total_battery_area, total_box_area, 0.9, 0.9, battery_temp_c, box_inner_temp_c, bucket_period_seconds
+        )
+
+        battery_temp_c = calc_change_in_temperature_c(
+                battery_temp_c, -battery_radiative_energy_flow_to_inner_wall_j, battery_heat_capacity, battery_mass_kg
+                )
+        box_inner_temp_c = calc_change_in_temperature_c(
+            box_inner_temp_c, battery_radiative_energy_flow_to_inner_wall_j, box_heat_capacity, box_wall_mass_kg
+            )
+
+        # Subtract so that Energy Flow is positive to indicate energy flowing away
+        battery_radi_to_box_inner_energy[i] += battery_radiative_energy_flow_to_inner_wall_j
+        battery_net_energy[i] += -battery_radiative_energy_flow_to_inner_wall_j
+
+        box_inner_radi_to_battery_energy[i] += -battery_radiative_energy_flow_to_inner_wall_j
+        box_inner_net_energy[i] += battery_radiative_energy_flow_to_inner_wall_j
+
+
         # Calculate energy flow from inner wall to outer wall based on delta between temperatures and resistances
         # From this net change in energy update the inner and outer wall temperatures.
         inner_wall_cond_energy_flow_to_outer_wall_j = calculate_heat_energy_flow(
@@ -590,7 +677,14 @@ def calculate_net_energy_flows(
         outer_wall_cond_energy_flow_to_environment_j = calculate_heat_energy_flow(
                 box_outer_temp_c, ambient_temperature, box_outer_conductive_resistance, bucket_period_seconds
                 )
-        outer_wall_total_flow_to_environment_j = outer_wall_conv_energy_flow_to_environment_j + outer_wall_cond_energy_flow_to_environment_j
+        outer_wall_radi_energy_flow_to_environment_j = calculate_outer_radiative_heat_flow(
+            total_box_area, 0.9, box_outer_temp_c, ambient_temperature, bucket_period_seconds
+        )
+        outer_wall_total_flow_to_environment_j = (
+            outer_wall_conv_energy_flow_to_environment_j 
+            + outer_wall_cond_energy_flow_to_environment_j
+            + outer_wall_radi_energy_flow_to_environment_j
+            )
         
         box_outer_temp_c = calc_change_in_temperature_c(
                 box_outer_temp_c, -outer_wall_total_flow_to_environment_j, box_heat_capacity, box_wall_mass_kg
@@ -601,6 +695,8 @@ def calculate_net_energy_flows(
         box_outer_conv_from_environment_energy[i] += -outer_wall_conv_energy_flow_to_environment_j
         box_outer_cond_to_environment_energy[i] += outer_wall_cond_energy_flow_to_environment_j
         box_outer_cond_from_environment_energy[i] += -outer_wall_cond_energy_flow_to_environment_j
+        box_outer_radi_to_environment_energy[i] += outer_wall_radi_energy_flow_to_environment_j
+        box_outer_radi_from_environment_energy[i] += -outer_wall_radi_energy_flow_to_environment_j
         box_outer_net_energy[i] += outer_wall_total_flow_to_environment_j
 
 
@@ -626,18 +722,22 @@ def calculate_net_energy_flows(
                 "Battery_Net_Energy_J": battery_net_energy,
                 "Battery_Cond_to_Box_Inner_Energy_J": battery_cond_to_box_inner_energy,
                 "Battery_Conv_to_Box_Inner_Energy_J": battery_conv_to_box_inner_energy,
+                "Battery_Radi_to_Box_Inner_Energy_J": battery_radi_to_box_inner_energy,
                 "Heater_to_Battery_Energy_J": heater_to_battery_energy,
                 "Heater_to_Wall_Energy_J": heater_to_box_inner_energy,
                 "Box_Inner_Net_Energy_J": box_inner_net_energy,
                 "Box_Inner_Cond_to_Battery_Energy_J": box_inner_cond_to_battery_energy,
                 "Box_Inner_Conv_to_Battery_Energy_J": box_inner_conv_to_battery_energy,
+                "Box_Inner_Radi_to_Battery_Energy_J": box_inner_radi_to_battery_energy,
                 "Box_Inner_to_Box_Outer_Energy_J": box_inner_to_box_outer_energy,
                 "Box_Outer_Net_Energy_J": box_outer_net_energy,
                 "Box_Outer_to_Box_Inner_Energy_J": box_outer_to_box_inner_energy,
                 "Box_Outer_Cond_to_Environment_Energy_J": box_outer_cond_to_environment_energy,
                 "Box_Outer_Conv_to_Environment_Energy_J": box_outer_conv_to_environment_energy,
+                "Box_Outer_Radi_to_Environment_Energy_J": box_outer_radi_to_environment_energy,
                 "Box_Outer_Cond_from_Environment_Energy_J": box_outer_cond_from_environment_energy,
                 "Box_Outer_Conv_from_Environment_Energy_J": box_outer_conv_from_environment_energy,
+                "Box_Outer_Radi_from_Environment_Energy_J": box_outer_radi_from_environment_energy,
             }
         )
     )

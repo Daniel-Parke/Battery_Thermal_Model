@@ -27,9 +27,11 @@ The Model is designed to be flexible and allow for different Battery & Box optio
 </div>
 
 ## Currently in devlopment:
-- Ability to trigger cooling fan upon temperature triggers, similar implementation to heater pad
-- Radiation losses to be added at all stages of the model. Function is made, just needs implemented
+- [ ] Ability to trigger cooling fan upon temperature triggers, similar implementation to heater pad
+- [X] Radiation losses to be added at all stages of the model. Function is made, just needs implemented
 - Ability to model customizable time intervals ranging from 1s - 1m over long periods of time. Current model is limited to only 1m intervals
+- Conversion of J to Wh built in to enable easier analysis
+- Class based implementation for easier model runtime configuration
 - Streamlit app to allow for easier user input to change model parameters, as well as displaying results
 
 ## Prerequisites
