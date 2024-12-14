@@ -3,6 +3,7 @@
 ## Table of Contents
 
 - [Introduction](#introduction)
+- [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Installation Guide](#installation-guide)
   - [1. Install Python](#1-install-python)
@@ -23,8 +24,27 @@ The Model is designed to be flexible and allow for different Battery & Box optio
 
 <div style="text-align: center;">
   <img src="TMY_Data/Data/example_model_plot.png" alt="Example of Model simulating Heater kicking on when Box temperature reaches trigger threshold" />
-  <p>Model simulating heater activation when the box temperature reaches the trigger threshold</p>
+  <p>Graph of modelling showing heater activation when the box temperature reaches the trigger threshold</p>
 </div>
+
+
+## Features:
+The current model has the following features:
+  - Ability to generate full load profile to include typical annual domestic energy profile for UK household
+  - Data is obtained using EU PVGIS satellite data for specific GPS coordinates provided
+  - TMY and Load data extrapolation to desired model timespan increments
+  - Full Conductive, Convective and Radiative heat energy flows modelled
+  - Battery and Storage Box included in model
+  - Material properties for Battery and Storage Box accurately captured
+  - Ability to specify different configurations for the Battery within the Storage Box
+  - Inclusion of Battery Heater to model energy requirements to maintain Battery temperature above threshold
+  - Net energy flows recorded for all surface interactions, recorded in Joules for accurate accounting of Net Energy flows
+  - Individual functions can be extracted, or full model can be run using Class based implementation.
+
+When creating the model the interpolated time intervals modelled can be specified, with the following intervals currently being available:
+- "1s" (1 second)
+- "1m" (1 minute)
+- "1h" (1 hour)
 
 ## Currently in devlopment:
 - [X] Radiation losses to be added at all stages of the model. Function is made, just needs implemented
@@ -33,6 +53,67 @@ The Model is designed to be flexible and allow for different Battery & Box optio
 - [X] Add ability to add custom dynamic load in addition to constant static load
 - [X] Class based implementation for easier model runtime configuration
 - [ ] Streamlit app to allow for easier user input to change model parameters, as well as displaying results
+
+
+## Example Implementation:
+'''python
+from Battery.Battery_Model import Battery_Model, Load, TMY_Data, Battery, Container
+
+# Set Location details and desired time interval
+latitude = 54.60283612642
+longitude = -5.9324865926
+interpolation_time_interval = "1m"
+
+load = Load(
+    daily_electric=9.91,
+    profile = "Domestic",
+    country = "UK",
+    interpolation_time_interval=interpolation_time_interval
+)
+
+tmy_data = TMY_Data(
+    latitude=latitude,
+    longitude=longitude,
+    interpolation_time_interval=interpolation_time_interval,
+    load=load
+)
+
+battery = Battery(
+    battery_length = 0.9,
+    battery_width = 0.6,
+    battery_height = 0.3,
+    battery_heat_capacity = 1000.0,
+    battery_mass_kg = 36.0,
+    battery_losses_perc = 0.03,
+    battery_emissivity = 0.9,
+    battery_transfer_array = [0, 1, 1, 1, 1, 1],
+    heater_threshold_temp_c = 5.0,
+    heater_power_w = 30.0,
+    heater_time_minutes = 5.0,
+    heater_battery_transfer = 0.8
+)
+
+box = Container(
+    box_length = 1.0,
+    box_width = 0.7,
+    box_height = 0.4,
+    inner_material = "Polystyrene",
+    outer_material = "Wood",
+    inner_material_thickness_m = 0.01,
+    outer_material_thickness_m = 0.01,
+    box_transfer_array = (0, 1, 1, 1, 1, 1)
+)
+
+battery_model = Battery_Model(
+    tmy_data=tmy_data,
+    battery=battery,
+    box=box
+)
+
+model_df = battery_model.model_df
+
+model_df.head(5)
+'''
 
 ## Prerequisites
 
