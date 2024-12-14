@@ -113,8 +113,7 @@ battery_model = Battery_Model(
 model_df = battery_model.model_df
 
 model_df.head(5)
-
-'''
+```
 
 ## Prerequisites
 
