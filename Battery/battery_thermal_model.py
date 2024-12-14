@@ -1,6 +1,8 @@
 import numpy as np
 import polars as pl
 
+from numba import njit
+
 from Battery.battery_model_functions import calculate_heat_transfer_areas
 
 
@@ -65,6 +67,7 @@ def calculate_composite_conductive_resistance(
     return total_resistance
 
 
+@njit
 def calculate_heat_energy_flow(
     internal_temperature: float, external_temperature: float, thermal_resistance: float, duration_seconds: float
 ) -> float:
@@ -86,6 +89,7 @@ def calculate_heat_energy_flow(
     return heat_energy_joules
 
 
+@njit
 def calculate_inner_radiative_heat_flow(
     surface_area_inner: float,
     surface_area_outer: float,
@@ -137,6 +141,7 @@ def calculate_inner_radiative_heat_flow(
     return heat_energy_joules
 
 
+@njit
 def calculate_outer_radiative_heat_flow(
     surface_area: float,
     emissivity: float,
@@ -172,6 +177,7 @@ def calculate_outer_radiative_heat_flow(
     return heat_energy_joules
 
 
+@njit
 def calculate_air_heat_capacity(temperature: float, relative_humidity: float) -> float:
     """
     Calculate the specific heat capacity of moist air based on temperature and relative humidity.
@@ -204,6 +210,7 @@ def calculate_air_heat_capacity(temperature: float, relative_humidity: float) ->
     return cp_moist_air
 
 
+@njit
 def calculate_battery_energy_losses(
     battery_power_w: float, loss_percentage: float, duration_seconds: float = 60
 ) -> float:
@@ -226,6 +233,7 @@ def calculate_battery_energy_losses(
     return energy_loss_j
 
 
+@njit
 def calculate_energy_input(power_w: float, duration_seconds: float = 60) -> float:
     """
     Calculate the heat energy input from the heater.
@@ -243,6 +251,7 @@ def calculate_energy_input(power_w: float, duration_seconds: float = 60) -> floa
     return heater_energy_j
 
 
+@njit
 def calc_change_in_temperature_c(
     initial_temp: float, heat_energy: float, heat_capacity: float, mass: float
 ) -> float:
@@ -439,15 +448,15 @@ def calculate_net_energy_flows(
         box_outer_conductive_resistance, box_outer_convective_resistance,
         total_box_area, total_battery_area
         ) = calculate_battery_box_parameters(
-        battery_length = battery_length, 
-        battery_width = battery_width, 
-        battery_height = battery_height, 
-        box_length = box_length, 
-        box_width = box_width, 
-        box_height = box_height, 
-        battery_transfer_array = battery_transfer_array, 
-        box_transfer_array = box_transfer_array, 
-        material_list = material_list, 
+        battery_length = battery_length,
+        battery_width = battery_width,
+        battery_height = battery_height,
+        box_length = box_length,
+        box_width = box_width,
+        box_height = box_height,
+        battery_transfer_array = battery_transfer_array,
+        box_transfer_array = box_transfer_array,
+        material_list = material_list,
     )
 
     # PRE CALCULATE BATTERY NET ENERGY WITH LOAD LOSSES AS THESE ARE PREDETERMINED
@@ -458,18 +467,12 @@ def calculate_net_energy_flows(
     battery_temp = initial_temperature
     box_temp = initial_temperature
 
-    # Use Static Load until incorporated into modelling class
-    if battery_static_load_w:
-        load_losses_j = battery_static_load_w * battery_losses_perc * bucket_period_seconds
-
     # Define default columns and their initial values, create temperature and energy tracking columns
     default_columns = {
         "Battery_Temp_C": battery_temp,
         "Box_Inner_Temp_C": box_temp,
         "Box_Outer_Temp_C": box_temp,
         "Battery_Heater_Input_J": 0.0,
-        "Battery_Losses_Input_J": load_losses_j,
-        "Battery_Net_Energy_J": load_losses_j,
         "Battery_Cond_to_Box_Inner_Energy_J": 0.0,
         "Battery_Conv_to_Box_Inner_Energy_J": 0.0,
         "Battery_Radi_to_Box_Inner_Energy_J": 0.0,
@@ -490,18 +493,26 @@ def calculate_net_energy_flows(
         "Box_Radi_Conv_from_Environment_Energy_J": 0.0,
     }
 
-    # Dynamically add columns to datefreame based on default columns above
+    # Dynamically add columns to DataFrame based on default columns above
     model_df = tmy_data_df.with_columns(
         [pl.lit(value).alias(name) for name, value in default_columns.items()]
     )
 
-    # Dynamically create arrays from default columns in dataframe
+    if "Energy_Use_kWh" in model_df.columns:
+        model_df = model_df.with_columns(
+            (pl.col("Energy_Use_kWh")
+             * 3_600_000
+             * battery_losses_perc)
+             .alias("Battery_Losses_Input_J") # Convert kWh to J
+        )
+
+    # Dynamically create arrays from default columns in DataFrame
     arrays = {
         name: np.array(model_df.select(name).to_series(), dtype=np.float64)
         for name in default_columns.keys()
     }
 
-    # Original Arrays from Dataframe
+    # Original Arrays from DataFrame
     datetime_temp = np.array(model_df.select("Datetime").to_series())
     amb_temp = np.array(model_df.select("Ambient_Temperature_C").to_series())
     humidity = np.array(model_df.select("Relative_Humidity_Perc").to_series())
@@ -512,8 +523,9 @@ def calculate_net_energy_flows(
     box_outer_temp = arrays["Box_Outer_Temp_C"]
 
     battery_heater_input = arrays["Battery_Heater_Input_J"]
-    battery_losses_input = arrays["Battery_Losses_Input_J"]
-    battery_net_energy = arrays["Battery_Net_Energy_J"]
+    battery_losses_input = np.array(model_df.select("Battery_Losses_Input_J").to_series())
+    battery_net_energy = np.array(model_df.select("Battery_Losses_Input_J").to_series())
+
     battery_cond_to_box_inner_energy = arrays["Battery_Cond_to_Box_Inner_Energy_J"]
     battery_conv_to_box_inner_energy = arrays["Battery_Conv_to_Box_Inner_Energy_J"]
     battery_radi_to_box_inner_energy = arrays["Battery_Radi_to_Box_Inner_Energy_J"]
@@ -535,6 +547,172 @@ def calculate_net_energy_flows(
     box_outer_cond_from_environment_energy = arrays["Box_Outer_Cond_from_Environment_Energy_J"]
     box_outer_conv_from_environment_energy = arrays["Box_Outer_Conv_from_Environment_Energy_J"]
     box_outer_radi_from_environment_energy = arrays["Box_Radi_Conv_from_Environment_Energy_J"]
+
+    (
+        datetime_temp,
+        amb_temp,
+        humidity,
+        battery_temp,
+        box_inner_temp,
+        box_outer_temp,
+        battery_heater_input,
+        battery_losses_input,
+        battery_net_energy,
+        battery_cond_to_box_inner_energy,
+        battery_conv_to_box_inner_energy,
+        battery_radi_to_box_inner_energy,
+        heater_to_battery_energy,
+        heater_to_box_inner_energy,
+        box_inner_net_energy,
+        box_inner_cond_to_battery_energy,
+        box_inner_conv_to_battery_energy,
+        box_inner_radi_to_battery_energy,
+        box_inner_to_box_outer_energy,
+        box_outer_net_energy,
+        box_outer_to_box_inner_energy,
+        box_outer_cond_to_environment_energy,
+        box_outer_conv_to_environment_energy,
+        box_outer_radi_to_environment_energy,
+        box_outer_cond_from_environment_energy,
+        box_outer_conv_from_environment_energy,
+        box_outer_radi_from_environment_energy,
+    ) = jit_battery_energy_flow_model(
+        # Model Arrays
+        datetime_temp,
+        amb_temp,
+        humidity,
+        battery_temp,
+        box_inner_temp,
+        box_outer_temp,
+        battery_heater_input,
+        battery_losses_input,
+        battery_net_energy,
+        battery_cond_to_box_inner_energy,
+        battery_conv_to_box_inner_energy,
+        battery_radi_to_box_inner_energy,
+        heater_to_battery_energy,
+        heater_to_box_inner_energy,
+        box_inner_net_energy,
+        box_inner_cond_to_battery_energy,
+        box_inner_conv_to_battery_energy,
+        box_inner_radi_to_battery_energy,
+        box_inner_to_box_outer_energy,
+        box_outer_net_energy,
+        box_outer_to_box_inner_energy,
+        box_outer_cond_to_environment_energy,
+        box_outer_conv_to_environment_energy,
+        box_outer_radi_to_environment_energy,
+        box_outer_cond_from_environment_energy,
+        box_outer_conv_from_environment_energy,
+        box_outer_radi_from_environment_energy,
+        # Model Variables
+        bucket_period_seconds,
+        battery_mass_kg,
+        battery_heat_capacity,
+        total_battery_area,
+        box_wall_mass_kg,
+        box_heat_capacity,
+        total_box_area,
+        battery_conductive_resistance,
+        battery_convective_resistance,
+        box_composite_conductive_resistance,
+        box_outer_conductive_resistance,
+        box_outer_convective_resistance,
+        heater_threshold_temp_c,
+        heater_power_j,
+        heater_battery_transfer,
+        heater_time_minutes,
+    )
+
+    print()
+
+    # Remake the output DataFrame from the model results
+    model_results_df = (
+        pl.DataFrame(
+            {
+                "Datetime" : datetime_temp,
+                "Ambient_Temperature_C" : amb_temp,
+                "Relative_Humidity_Perc" : humidity,
+                "Battery_Temp_C": battery_temp,
+                "Box_Inner_Temp_C": box_inner_temp,
+                "Box_Outer_Temp_C": box_outer_temp,
+                "Battery_Heater_Input_J": battery_heater_input,
+                "Battery_Losses_Input_J": battery_losses_input,
+                "Battery_Net_Energy_J": battery_net_energy,
+                "Battery_Cond_to_Box_Inner_Energy_J": battery_cond_to_box_inner_energy,
+                "Battery_Conv_to_Box_Inner_Energy_J": battery_conv_to_box_inner_energy,
+                "Battery_Radi_to_Box_Inner_Energy_J": battery_radi_to_box_inner_energy,
+                "Heater_to_Battery_Energy_J": heater_to_battery_energy,
+                "Heater_to_Wall_Energy_J": heater_to_box_inner_energy,
+                "Box_Inner_Net_Energy_J": box_inner_net_energy,
+                "Box_Inner_Cond_to_Battery_Energy_J": box_inner_cond_to_battery_energy,
+                "Box_Inner_Conv_to_Battery_Energy_J": box_inner_conv_to_battery_energy,
+                "Box_Inner_Radi_to_Battery_Energy_J": box_inner_radi_to_battery_energy,
+                "Box_Inner_to_Box_Outer_Energy_J": box_inner_to_box_outer_energy,
+                "Box_Outer_Net_Energy_J": box_outer_net_energy,
+                "Box_Outer_to_Box_Inner_Energy_J": box_outer_to_box_inner_energy,
+                "Box_Outer_Cond_to_Environment_Energy_J": box_outer_cond_to_environment_energy,
+                "Box_Outer_Conv_to_Environment_Energy_J": box_outer_conv_to_environment_energy,
+                "Box_Outer_Radi_to_Environment_Energy_J": box_outer_radi_to_environment_energy,
+                "Box_Outer_Cond_from_Environment_Energy_J": box_outer_cond_from_environment_energy,
+                "Box_Outer_Conv_from_Environment_Energy_J": box_outer_conv_from_environment_energy,
+                "Box_Outer_Radi_from_Environment_Energy_J": box_outer_radi_from_environment_energy,
+            }
+        )
+    )
+
+    return model_results_df
+
+
+@njit
+def jit_battery_energy_flow_model(
+    # Model Arrays
+    datetime_temp: np.ndarray,
+    amb_temp: np.ndarray,
+    humidity: np.ndarray,
+    battery_temp: np.ndarray,
+    box_inner_temp: np.ndarray,
+    box_outer_temp: np.ndarray,
+    battery_heater_input: np.ndarray,
+    battery_losses_input: np.ndarray,
+    battery_net_energy: np.ndarray,
+    battery_cond_to_box_inner_energy: np.ndarray,
+    battery_conv_to_box_inner_energy: np.ndarray,
+    battery_radi_to_box_inner_energy: np.ndarray,
+    heater_to_battery_energy: np.ndarray,
+    heater_to_box_inner_energy: np.ndarray,
+    box_inner_net_energy: np.ndarray,
+    box_inner_cond_to_battery_energy: np.ndarray,
+    box_inner_conv_to_battery_energy: np.ndarray,
+    box_inner_radi_to_battery_energy: np.ndarray,
+    box_inner_to_box_outer_energy: np.ndarray,
+    box_outer_net_energy: np.ndarray,
+    box_outer_to_box_inner_energy: np.ndarray,
+    box_outer_cond_to_environment_energy: np.ndarray,
+    box_outer_conv_to_environment_energy: np.ndarray,
+    box_outer_radi_to_environment_energy: np.ndarray,
+    box_outer_cond_from_environment_energy: np.ndarray,
+    box_outer_conv_from_environment_energy: np.ndarray,
+    box_outer_radi_from_environment_energy: np.ndarray,
+
+    # Model Parameters
+    bucket_period_seconds: float,
+    battery_mass_kg: float,
+    battery_heat_capacity: float,
+    total_battery_area: float,
+    box_wall_mass_kg: float,
+    box_heat_capacity: float,
+    total_box_area: float,
+    battery_conductive_resistance: float,
+    battery_convective_resistance: float,
+    box_composite_conductive_resistance: float,
+    box_outer_conductive_resistance: float,
+    box_outer_convective_resistance: float,
+    heater_threshold_temp_c: float,
+    heater_power_j: float,
+    heater_battery_transfer: float,
+    heater_time_minutes: int,
+):
 
     # MODEL VARIABLES THAT NEED INITIALISED FROM ARRAYS FOR FIRST VALUE
     battery_temp_c = battery_temp[0]
@@ -705,43 +883,33 @@ def calculate_net_energy_flows(
         battery_temp[i] = battery_temp_c
         box_inner_temp[i] = box_inner_temp_c
         box_outer_temp[i] = box_outer_temp_c
-        
 
-    # Remake the output Dataframe from the model results
-    model_results_df = (
-        pl.DataFrame(
-            {
-                "Datetime" : datetime_temp,
-                "Ambient_Temperature_C" : amb_temp,
-                "Relative_Humidity_Perc" : humidity,
-                "Battery_Temp_C": battery_temp,
-                "Box_Inner_Temp_C": box_inner_temp,
-                "Box_Outer_Temp_C": box_outer_temp,
-                "Battery_Heater_Input_J": battery_heater_input,
-                "Battery_Losses_Input_J": battery_losses_input,
-                "Battery_Net_Energy_J": battery_net_energy,
-                "Battery_Cond_to_Box_Inner_Energy_J": battery_cond_to_box_inner_energy,
-                "Battery_Conv_to_Box_Inner_Energy_J": battery_conv_to_box_inner_energy,
-                "Battery_Radi_to_Box_Inner_Energy_J": battery_radi_to_box_inner_energy,
-                "Heater_to_Battery_Energy_J": heater_to_battery_energy,
-                "Heater_to_Wall_Energy_J": heater_to_box_inner_energy,
-                "Box_Inner_Net_Energy_J": box_inner_net_energy,
-                "Box_Inner_Cond_to_Battery_Energy_J": box_inner_cond_to_battery_energy,
-                "Box_Inner_Conv_to_Battery_Energy_J": box_inner_conv_to_battery_energy,
-                "Box_Inner_Radi_to_Battery_Energy_J": box_inner_radi_to_battery_energy,
-                "Box_Inner_to_Box_Outer_Energy_J": box_inner_to_box_outer_energy,
-                "Box_Outer_Net_Energy_J": box_outer_net_energy,
-                "Box_Outer_to_Box_Inner_Energy_J": box_outer_to_box_inner_energy,
-                "Box_Outer_Cond_to_Environment_Energy_J": box_outer_cond_to_environment_energy,
-                "Box_Outer_Conv_to_Environment_Energy_J": box_outer_conv_to_environment_energy,
-                "Box_Outer_Radi_to_Environment_Energy_J": box_outer_radi_to_environment_energy,
-                "Box_Outer_Cond_from_Environment_Energy_J": box_outer_cond_from_environment_energy,
-                "Box_Outer_Conv_from_Environment_Energy_J": box_outer_conv_from_environment_energy,
-                "Box_Outer_Radi_from_Environment_Energy_J": box_outer_radi_from_environment_energy,
-            }
-        )
+    return (
+        datetime_temp,
+        amb_temp,
+        humidity,
+        battery_temp,
+        box_inner_temp,
+        box_outer_temp,
+        battery_heater_input,
+        battery_losses_input,
+        battery_net_energy,
+        battery_cond_to_box_inner_energy,
+        battery_conv_to_box_inner_energy,
+        battery_radi_to_box_inner_energy,
+        heater_to_battery_energy,
+        heater_to_box_inner_energy,
+        box_inner_net_energy,
+        box_inner_cond_to_battery_energy,
+        box_inner_conv_to_battery_energy,
+        box_inner_radi_to_battery_energy,
+        box_inner_to_box_outer_energy,
+        box_outer_net_energy,
+        box_outer_to_box_inner_energy,
+        box_outer_cond_to_environment_energy,
+        box_outer_conv_to_environment_energy,
+        box_outer_radi_to_environment_energy,
+        box_outer_cond_from_environment_energy,
+        box_outer_conv_from_environment_energy,
+        box_outer_radi_from_environment_energy,
     )
-   
-    return model_results_df
-
-

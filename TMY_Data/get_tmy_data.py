@@ -5,31 +5,25 @@ from pathlib import Path
 from datetime import datetime
 
 def get_tmy_data(
-    file_path: str = None,
+    data_file_path: str = None,
     latitude: float = None,
     longitude: float = None,
 ) -> pl.DataFrame:
 
-    if file_path:
-        file = Path(file_path)
+    if data_file_path:
+        file = Path(data_file_path)
         if file.exists():
-            try:
-                tmy_data = pl.read_parquet(file_path)
-                return tmy_data
-            except Exception as e:
-                pass
-        else:
-            return f"File does not exist at '{file_path}'"
-
-    else:
-        if latitude or longitude:
-            tmy_data = get_tmy_data_pvgis(
-                latitude=latitude,
-                longitude=longitude,
-            )
+            tmy_data = pl.read_parquet(data_file_path)
             return tmy_data
         else:
-            return "No Latitude or Longitude values provided"
+            if latitude and longitude:
+                tmy_data = get_tmy_data_pvgis(
+                    latitude=latitude,
+                    longitude=longitude,
+                )
+                return tmy_data
+            else:
+                return "No Latitude or Longitude values provided"
 
 
 def get_tmy_data_pvgis(
@@ -52,12 +46,15 @@ def get_tmy_data_pvgis(
     return response
 
 
-def interpolate_tmy_dataframe(tmy_data_df: pl.DataFrame) -> pl.DataFrame:
+def interpolate_tmy_dataframe(
+        tmy_data_df: pl.DataFrame,
+        interpolation_time_interval: str = "1m",
+        ) -> pl.DataFrame:
     # Generate datetime ranges
     datetime_range_1m = pl.datetime_range(
         start=datetime(2025, 1, 1, 0, 0, 0),
         end=datetime(2025, 12, 31, 23, 59, 0),
-        interval="1m",
+        interval=interpolation_time_interval,
         eager=True,
     )
 
@@ -118,12 +115,25 @@ def clean_tmy_data(tmy_data_df: pl.DataFrame) -> pl.DataFrame:
     return tmy_data_df
 
 
-def get_processed_tmy_data(data_file_path: str) -> pl.DataFrame:
+def get_processed_tmy_data(
+        data_file_path: str,
+        latitude: float = None,
+        longitude: float = None,
+        interpolation_time_interval: str = "1m",
+        ) -> pl.DataFrame:
+    
     # Load TMY DataFrame
-    tmy_data_df = get_tmy_data(data_file_path)
+    tmy_data_df = get_tmy_data(
+        data_file_path=data_file_path,
+        latitude=latitude, 
+        longitude=longitude
+        )
 
     # Interpolate data from 1hr to 1minute increments
-    tmy_data_df = interpolate_tmy_dataframe(tmy_data_df)
+    tmy_data_df = interpolate_tmy_dataframe(
+        tmy_data_df=tmy_data_df,
+        interpolation_time_interval=interpolation_time_interval,
+        )
 
     # Clean TMY dataframe
     tmy_data_df = clean_tmy_data(tmy_data_df)

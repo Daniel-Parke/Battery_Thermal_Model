@@ -13,6 +13,7 @@ class Load:
     annual_electric: float = None
     load_profile_path: str = None
     load_profile: pl.DataFrame = field(default=None, init=True)
+    interpolation_time_interval: str = "1m"
     interopolated_load_profile: pl.DataFrame = field(default=None, init=True)
 
     def __post_init__(self):
