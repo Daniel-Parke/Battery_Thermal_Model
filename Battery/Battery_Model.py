@@ -31,6 +31,7 @@ class Battery_Model:
             battery_mass_kg = self.battery.battery_mass_kg,
             battery_losses_perc = self.battery.battery_losses_perc,
             heater_threshold_temp_c = self.battery.heater_threshold_temp_c,
+            use_heater = self.battery.use_heater,
             heater_power_w = self.battery.heater_power_w,
             heater_time_minutes = self.battery.heater_time_minutes,
             heater_battery_transfer = self.battery.heater_battery_transfer,

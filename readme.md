@@ -87,6 +87,7 @@ battery = Battery(
     battery_losses_perc=0.03,
     battery_emissivity=0.9,
     battery_transfer_array=[0, 1, 1, 1, 1, 1],
+    # Heater Specifications
     heater_threshold_temp_c=5.0,
     heater_power_w=30.0,
     heater_time_minutes=5.0,

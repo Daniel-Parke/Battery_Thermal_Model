@@ -401,8 +401,9 @@ def calculate_net_energy_flows(
     battery_height: float = 0.3,
     battery_heat_capacity: float = 1000.0,
     battery_mass_kg: float = 36.0,
-    battery_losses_perc: float = 0.03, 
+    battery_losses_perc: float = 0.03,
     heater_threshold_temp_c: float = 5.0,
+    use_heater: bool = True,
     heater_power_w: float = 30.0,
     heater_time_minutes: float = 5.0,
     heater_battery_transfer: float = 0.8,
@@ -621,6 +622,7 @@ def calculate_net_energy_flows(
         box_outer_conductive_resistance,
         box_outer_convective_resistance,
         heater_threshold_temp_c,
+        use_heater,
         heater_power_j,
         heater_battery_transfer,
         heater_time_minutes,
@@ -629,8 +631,6 @@ def calculate_net_energy_flows(
         box_outer_emissivity,
         battery_throughput_losses,
     )
-
-    print()
 
     # Remake the output DataFrame from the model results
     model_results_df = (
@@ -715,6 +715,7 @@ def jit_battery_energy_flow_model(
     box_outer_conductive_resistance: float,
     box_outer_convective_resistance: float,
     heater_threshold_temp_c: float,
+    use_heater: bool,
     heater_power_j: float,
     heater_battery_transfer: float,
     heater_time_minutes: int,
@@ -741,6 +742,7 @@ def jit_battery_energy_flow_model(
                 heater_counter += 1
             else:
                 heater_on = False
+                heater_counter = 0
 
         # Need to calculate net energy flows into air, battery, box inner and outer wall, and environment
         # Temperature should be updated each time a flow is calculated to ensure next calculation is accurate
@@ -748,7 +750,11 @@ def jit_battery_energy_flow_model(
         # Calculate net energy flow from heater pad if threshold temperature triggered
         # (1) Calculate net energy flow into battery from throughput losses converted into heat (3%)
         # (2) If heater is on, the only conductive energy flow from battery to walls are the 20% losses from heating pad
-        if box_inner_temp_c <= heater_threshold_temp_c or heater_on:
+        if box_inner_temp_c <= heater_threshold_temp_c and use_heater:
+            heater_on = True
+            heater_counter = 0
+
+        if use_heater and heater_on:
             heater_battery_energy_j = heater_power_j * heater_battery_transfer
             heater_wall_energy_j = heater_power_j * (1-heater_battery_transfer)
 
@@ -769,9 +775,7 @@ def jit_battery_energy_flow_model(
                 box_inner_temp_c, heater_wall_energy_j, box_heat_capacity, box_wall_mass_kg
                 )
             
-            if not heater_on:
-                heater_on = True
-                heater_counter += 1
+            heater_counter += 1
 
         # Calculate net energy flows from battery to air, and inner wall. Add 20% heating loss to inner wall if applicable
         # If heating pad is not on, standard conduction formula for battery to walls apply

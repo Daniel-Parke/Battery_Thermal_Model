@@ -13,6 +13,7 @@ class Battery:
     battery_losses_perc: float = 0.03
     battery_emissivity: float = 0.9
     battery_transfer_array: List[int] = (0, 1, 1, 1, 1, 1)
+    use_heater: bool = True
     heater_threshold_temp_c: float = 5.0
     heater_power_w: float = 30.0
     heater_time_minutes: float = 5.0
