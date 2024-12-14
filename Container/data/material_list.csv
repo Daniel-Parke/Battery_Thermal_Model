@@ -1,0 +1,3 @@
+material,thermal_conductivity,heat_capacity,density,emissivity
+wood,0.15,1760.0,600.0,0.9
+polystyrene,0.03,1300.0,30.0,0.9

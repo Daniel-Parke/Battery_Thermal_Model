@@ -17,9 +17,9 @@
 
 Welcome to the **Battery Thermal Model** repository! This codebase is designed to model the temperatures and net energy flows experienced by a Battery over the course of a year under varying conditions. 
 
-The model retrieves TMY weather data for a specific location based on Latitude and Longitude. A Load Profile can then be generated to simulate the Battery under load, and the various losses that contribute to heat. Additionally a heater and eventually a cooling fan can also be modelled. The net energy flows are recorded for the Battery and the Inner/Outer walls of the container it is in. 
+The model retrieves TMY weather data for a specific location based on Latitude and Longitude. A Load Profile can then be generated to simulate the Battery under load, and the various losses that contribute to heat. Additionally a heater can also be modelled to model requirements for maintaining a minumum battery temperature. The net energy flows are recorded for the Battery, Inner/Outer walls, and to/from the environment. 
 
-The Model is designed to be flexible and allow for different Battery & Box options to be modelled. By using arrays the model can simulate both conductive and convective heat flows, with the net energy flows and temperatures for each model parameter being recorded. 
+The Model is designed to be flexible and allow for different Battery & Box options to be modelled. By using arrays the model can simulate both conductive and convective heat flows, with the net energy flows and temperatures for each model parameter being recorded. Radiative energy flows have also been included in a recent update.
 
 <div style="text-align: center;">
   <img src="TMY_Data/Data/example_model_plot.png" alt="Example of Model simulating Heater kicking on when Box temperature reaches trigger threshold" />
@@ -31,8 +31,7 @@ The Model is designed to be flexible and allow for different Battery & Box optio
 - [X] Ability to model customizable time intervals ranging from 1s - 1m over long periods of time. Current model is limited to only 1m intervals
 - [X] Refactor Battery Thermal Model to work with numba acceleration
 - [X] Add ability to add custom dynamic load in addition to constant static load
-- [ ] Conversion of J to Wh built in to enable easier analysis
-- [ ] Class based implementation for easier model runtime configuration
+- [X] Class based implementation for easier model runtime configuration
 - [ ] Streamlit app to allow for easier user input to change model parameters, as well as displaying results
 
 ## Prerequisites

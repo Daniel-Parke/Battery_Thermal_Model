@@ -59,7 +59,7 @@ def calculate_composite_conductive_resistance(
     """
     total_resistance = 0.0
 
-    for thickness_m, thermal_conductivity, _, _ in materials:
+    for thickness_m, thermal_conductivity, _, _, _ in materials:
         # Calculate resistance for each layer
         resistance = thickness_m / (thermal_conductivity * area_m2)
         total_resistance += resistance
@@ -402,7 +402,6 @@ def calculate_net_energy_flows(
     battery_heat_capacity: float = 1000.0,
     battery_mass_kg: float = 36.0,
     battery_losses_perc: float = 0.03, 
-    battery_static_load_w: float = 1000.0,
     heater_threshold_temp_c: float = 5.0,
     heater_power_w: float = 30.0,
     heater_time_minutes: float = 5.0,
@@ -411,6 +410,10 @@ def calculate_net_energy_flows(
     box_transfer_array: list[int] = None,
     material_list: list[tuple[float, float, float, float]] = None,
     bucket_period_seconds: float = 60.0,
+    battery_emissivity: float = 0.9,
+    box_inner_emissivity: float = 0.9,
+    box_outer_emissivity: float = 0.9,
+    battery_throughput_losses: float = 0.03,
 ) -> pl.DataFrame:
     """
     Calculate net energy flows in a system over time using Typical Meteorological Year (TMY) data.
@@ -427,7 +430,6 @@ def calculate_net_energy_flows(
         battery_heat_capacity (float): Heat capacity of the battery in J/(kg·K).
         battery_mass_kg (float): Mass of the battery in kilograms.
         battery_losses_perc (float): Percentage of energy losses due to battery inefficiency (e.g., 0.03 for 3%).
-        battery_static_load_w (float): Static load on the battery in watts.
         heater_threshold_temp_c (float): Temperature in degrees Celsius below which the heater activates.
         heater_power_w (float): Power of the heater in watts.
         heater_time_minutes (float): Minimum duration in minutes that the heater remains active once triggered.
@@ -622,6 +624,10 @@ def calculate_net_energy_flows(
         heater_power_j,
         heater_battery_transfer,
         heater_time_minutes,
+        battery_emissivity,
+        box_inner_emissivity,
+        box_outer_emissivity,
+        battery_throughput_losses,
     )
 
     print()
@@ -712,6 +718,10 @@ def jit_battery_energy_flow_model(
     heater_power_j: float,
     heater_battery_transfer: float,
     heater_time_minutes: int,
+    battery_emissivity: float,
+    box_inner_emissivity: float,
+    box_outer_emissivity: float,
+    battery_throughput_losses: float,
 ):
 
     # MODEL VARIABLES THAT NEED INITIALISED FROM ARRAYS FOR FIRST VALUE
@@ -743,7 +753,7 @@ def jit_battery_energy_flow_model(
             heater_wall_energy_j = heater_power_j * (1-heater_battery_transfer)
 
             battery_heater_input[i] += heater_power_j
-            battery_losses_input[i] += heater_power_j * 0.03        # (1)
+            battery_losses_input[i] += heater_power_j * battery_throughput_losses 
             battery_losses_input_energy_j = battery_losses_input[i]
             battery_total_heating_losses_energy_j = battery_losses_input_energy_j + heater_battery_energy_j
 
@@ -808,7 +818,7 @@ def jit_battery_energy_flow_model(
 
         # Calculate Radiative energy exchange between battery and inner walls
         battery_radiative_energy_flow_to_inner_wall_j = calculate_inner_radiative_heat_flow(
-            total_battery_area, total_box_area, 0.9, 0.9, battery_temp_c, box_inner_temp_c, bucket_period_seconds
+            total_battery_area, total_box_area, battery_emissivity, box_inner_emissivity, battery_temp_c, box_inner_temp_c, bucket_period_seconds
         )
 
         battery_temp_c = calc_change_in_temperature_c(
@@ -856,7 +866,7 @@ def jit_battery_energy_flow_model(
                 box_outer_temp_c, ambient_temperature, box_outer_conductive_resistance, bucket_period_seconds
                 )
         outer_wall_radi_energy_flow_to_environment_j = calculate_outer_radiative_heat_flow(
-            total_box_area, 0.9, box_outer_temp_c, ambient_temperature, bucket_period_seconds
+            total_box_area, box_outer_emissivity, box_outer_temp_c, ambient_temperature, bucket_period_seconds
         )
         outer_wall_total_flow_to_environment_j = (
             outer_wall_conv_energy_flow_to_environment_j 
